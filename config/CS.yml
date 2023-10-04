@@ -1,0 +1,31 @@
+node:
+  bn: True
+  checkpoint: cs_node
+  decoder_channels: 32
+  decoder_dropout: 0.2
+  encoder_channels: 64
+  encoder_dropout: 0.8
+  encoder_layers: 2
+  epochs: 1000
+  eval_period: 10
+  l2_norm: False
+  lr: 0.01
+  runs: 10
+  temp: 1e-6
+  weight_decay: 5e-5
+  weight_decay_prob: 1e-3
+
+link:
+  bn: True
+  checkpoint: cs_link
+  decoder_channels: 64
+  decoder_dropout: 0.2
+  encoder_channels: 64
+  encoder_dropout: 0.8
+  encoder_layers: 1
+  epochs: 1000
+  eval_period: 10
+  lr: 0.001
+  runs: 10
+  temp: 0.9
+  weight_decay: 5e-5

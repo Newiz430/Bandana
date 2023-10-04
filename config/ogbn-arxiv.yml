@@ -1,0 +1,16 @@
+node:
+  bn: True
+  checkpoint: arxiv_node
+  decoder_channels: 256
+  decoder_dropout: 0
+  encoder_channels: 256
+  encoder_dropout: 0.2
+  encoder_layers: 4
+  epochs: 100
+  eval_period: 10
+  l2_norm: False
+  lr: 0.0005
+  runs: 10
+  temp: 0.4
+  weight_decay: 5e-5
+  weight_decay_prob: 1e-4

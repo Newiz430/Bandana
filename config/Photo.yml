@@ -1,0 +1,31 @@
+node:
+  bn: True
+  checkpoint: photo_node
+  decoder_channels: 64
+  decoder_dropout: 0.2
+  encoder_channels: 256
+  encoder_dropout: 0.8
+  encoder_layers: 2
+  epochs: 1000
+  eval_period: 10
+  l2_norm: False
+  lr: 0.002
+  runs: 10
+  temp: 1
+  weight_decay: 5e-5
+  weight_decay_prob: 5e-4
+
+link:
+  bn: True
+  checkpoint: photo_link
+  decoder_channels: 256
+  decoder_dropout: 0.2
+  encoder_channels: 256
+  encoder_dropout: 0.8
+  encoder_layers: 3
+  epochs: 1000
+  eval_period: 10
+  lr: 0.002
+  runs: 10
+  temp: 1
+  weight_decay: 5e-4

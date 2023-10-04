@@ -1,0 +1,31 @@
+node:
+  bn: True
+  checkpoint: citeseer_node
+  decoder_channels: 256
+  decoder_dropout: 0
+  encoder_channels: 256
+  encoder_dropout: 0.8
+  encoder_layers: 5
+  epochs: 1000
+  eval_period: 10
+  l2_norm: True
+  lr: 0.02
+  runs: 10
+  temp: 0.2
+  weight_decay: 5e-5
+  weight_decay_prob: 0.1
+
+link:
+  bn: True
+  checkpoint: citeseer_link
+  decoder_channels: 64
+  decoder_dropout: 0.7
+  encoder_channels: 128
+  encoder_dropout: 0.8
+  encoder_layers: 1
+  epochs: 1000
+  eval_period: 10
+  lr: 0.02
+  runs: 10
+  temp: 0.4
+  weight_decay: 0
