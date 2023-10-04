@@ -3,7 +3,7 @@ import torch.nn as nn
 from torch import Tensor
 from torch_geometric.utils import to_undirected
 
-from src.utils import edgeidx2sparse, softmax_with_temp
+from .utils import edgeidx2sparse, softmax_with_temp
 
 
 class BandwidthMask(nn.Module):

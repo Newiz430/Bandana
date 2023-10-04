@@ -7,8 +7,7 @@ import argparse
 import torch
 import torch.nn as nn
 import torch_geometric.transforms as T
-from torch_geometric.data import Data
-from torch_geometric.datasets import Amazon, Coauthor, Planetoid, Reddit
+from torch_geometric.datasets import Amazon, Coauthor, Planetoid
 from torch.utils.data import DataLoader
 from sklearn.metrics import f1_score
 
