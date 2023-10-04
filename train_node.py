@@ -12,7 +12,7 @@ from torch_geometric.datasets import Amazon, Coauthor, Planetoid, Reddit
 from torch.utils.data import DataLoader
 from sklearn.metrics import f1_score
 
-from src.utils import Logger, set_seed
+from src.utils import Logger, set_seed, load_config
 from src.model import Bandana, Decoder, Encoder
 from src.mask import BandwidthMask
 
@@ -53,49 +53,50 @@ def train_linkpred(model, splits, args, device="cpu"):
     losses = []
     print('Start Training (Link Prediction Pretext Training)...')
     for run in range(runs):
-        model.reset_parameters()
+        if not args.load_from_cp:
+            model.reset_parameters()
 
-        optimizer = torch.optim.Adam(model.parameters(),
-                                     lr=args.lr,
-                                     weight_decay=args.weight_decay)
+            optimizer = torch.optim.Adam(model.parameters(),
+                                         lr=args.lr,
+                                         weight_decay=args.weight_decay)
 
-        best_valid = 0.0
-        best_epoch = 0
-        cnt_wait = 0
+            best_valid = 0.0
+            best_epoch = 0
+            cnt_wait = 0
 
-        for epoch in range(1, 1 + args.epochs):
+            for epoch in range(1, 1 + args.epochs):
 
-            t1 = time.time()
-            loss = train(splits['train'])
-            t2 = time.time()
-            losses.append(loss.item())
+                t1 = time.time()
+                loss = train(splits['train'])
+                t2 = time.time()
+                losses.append(loss.item())
 
-            if epoch % args.eval_period == 0:
-                results = test(splits)
-                valid_result = results[monitor][0]
-                if valid_result >= best_valid:
-                    best_valid = valid_result
-                    best_epoch = epoch
-                    torch.save(model.state_dict(), checkpoint)
-                    cnt_wait = 0
-                else:
-                    cnt_wait += 1
+                if epoch % args.eval_period == 0:
+                    results = test(splits)
+                    valid_result = results[monitor][0]
+                    if valid_result >= best_valid:
+                        best_valid = valid_result
+                        best_epoch = epoch
+                        torch.save(model.state_dict(), checkpoint)
+                        cnt_wait = 0
+                    else:
+                        cnt_wait += 1
 
-                for key, result in results.items():
-                    valid_result, test_result = result
-                    print(key)
-                    print(f'Run: {run + 1:02d} / {args.runs:02d}, '
-                          f'Epoch: {epoch:02d} / {args.epochs:02d}, '
-                          f'Best_epoch: {best_epoch:02d}, '
-                          f'Best_valid: {best_valid:.2%}%, '
-                          f'Loss: {loss:.4f}, '
-                          f'Valid: {valid_result:.2%}, '
-                          f'Test: {test_result:.2%}',
-                          f'Training Time/epoch: {t2-t1:.3f}')
-                print('#' * round(140*epoch/(args.epochs+1)))
-                if cnt_wait == args.patience:
-                    print('Early stopping!')
-                    break
+                    for key, result in results.items():
+                        valid_result, test_result = result
+                        print(key)
+                        print(f'Run: {run + 1:02d} / {args.runs:02d}, '
+                              f'Epoch: {epoch:02d} / {args.epochs:02d}, '
+                              f'Best_epoch: {best_epoch:02d}, '
+                              f'Best_valid: {best_valid:.2%}%, '
+                              f'Loss: {loss:.4f}, '
+                              f'Valid: {valid_result:.2%}, '
+                              f'Test: {test_result:.2%}',
+                              f'Training Time/epoch: {t2-t1:.3f}')
+                    print('#' * round(140*epoch/(args.epochs+1)))
+                    if cnt_wait == args.patience:
+                        print('Early stopping!')
+                        break
 
         print('##### Testing on {}/{}'.format(run + 1, args.runs))
 
@@ -252,12 +253,16 @@ parser.add_argument('--epochs', type=int, default=1000, help='Number of training
 parser.add_argument('--runs', type=int, default=10, help='Number of runs. (default: 10)')
 parser.add_argument('--eval_period', type=int, default=30, help='(default: 30)')
 parser.add_argument('--patience', type=int, default=30, help='(default: 30)')
-parser.add_argument("--checkpoint", nargs="?", default="cp_node", help="save path for model. (default: cp_node)")
+parser.add_argument("--checkpoint", nargs="?", default="cp_node", help="checkpoint save path for model. (default: cp_node)")
+parser.add_argument("--load_from_cp", action='store_true', help="Only evaluate with the .pth files from `--checkpoint`. (default: False)")
 parser.add_argument('--debug', action='store_true', help='Whether to log information in each epoch. (default: False)')
 parser.add_argument("--device", type=int, default=0)
+parser.add_argument("--use_cfg", action='store_true', help='Whether to use the best configurations. (default: False)')
 parser.add_argument('--log_path', type=str, default='./log')
 
 args = parser.parse_args()
+if args.use_cfg:
+    args = load_config(args, './config', 'node')
 if not args.checkpoint.endswith('.pth'):
     args.checkpoint += '.pth'
 
@@ -276,10 +281,10 @@ transform = T.Compose([
 
 root = osp.join(osp.expanduser('~/public_data/pyg_data'))
 
-if args.dataset in {'arxiv'}:
+if args.dataset in {'ogbn-arxiv'}:
     from ogb.nodeproppred import PygNodePropPredDataset
-    print('loading ogb dataset...')
-    dataset = PygNodePropPredDataset(root=args.data_path, name=f'ogbn-{args.dataset}')
+    print('Loading ogb dataset...')
+    dataset = PygNodePropPredDataset(root=args.data_path, name=args.dataset)
     data = transform(dataset[0])
     split_idx = dataset.get_idx_split()
     data.train_nodes = split_idx['train']

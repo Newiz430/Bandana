@@ -11,7 +11,7 @@ import torch_geometric.transforms as T
 from torch_geometric.utils import to_undirected
 from ogb.linkproppred import Evaluator, PygLinkPropPredDataset
 
-from src.utils import Logger, set_seed
+from src.utils import Logger, set_seed, load_config
 from src.model import Bandana, Decoder, Encoder
 from src.mask import BandwidthMask
 
@@ -37,6 +37,7 @@ def train_linkpred(model, splits, args, device="cpu"):
 
     evaluator = Evaluator(name=args.dataset)    
     monitor = 'Hits@50'
+    checkpoint = args.checkpoint
     loggers = {
         'Hits@20': Logger('Hits@20', args.runs, now, args, log_path=args.log_path),
         'Hits@50': Logger('Hits@50', args.runs, now, args, log_path=args.log_path),
@@ -44,37 +45,40 @@ def train_linkpred(model, splits, args, device="cpu"):
     }
     print('Start Training...')
     for run in range(args.runs):
-        model.reset_parameters()
+        if not args.load_from_cp:
+            model.reset_parameters()
 
-        optimizer = torch.optim.Adam(model.parameters(),
-                                     lr=args.lr,
-                                     weight_decay=args.weight_decay)
+            optimizer = torch.optim.Adam(model.parameters(),
+                                         lr=args.lr,
+                                         weight_decay=args.weight_decay)
 
-        best_valid = 0.0
-        best_epoch = 0
-        for epoch in tqdm(range(1, 1 + args.epochs)):
+            best_valid = 0.0
+            best_epoch = 0
+            for epoch in tqdm(range(1, 1 + args.epochs)):
 
-            t1 = time.time()
-            loss = train(splits['train'])
-            t2 = time.time()
+                t1 = time.time()
+                loss = train(splits['train'])
+                t2 = time.time()
 
-            if epoch % args.eval_period == 0:
-                results = test(splits)
-                if args.debug:
-                    for key, result in results.items():
-                        valid_result, test_result = result
-                        print(key)
-                        print(f'Run: {run + 1:02d} / {args.runs:02d}, '
-                              f'Epoch: {epoch:02d} / {args.epochs:02d}, '
-                              f'Best_epoch: {best_epoch:02d}, '
-                              f'Best_valid: {best_valid:.2%}%, '
-                              f'Loss: {loss:.4f}, '
-                              f'Valid: {valid_result:.2%}, '
-                              f'Test: {test_result:.2%}',
-                              f'Training Time/epoch: {t2-t1:.3f}')
-                    print('#' * round(140*epoch/(args.epochs+1)))
+                if epoch % args.eval_period == 0:
+                    results = test(splits)
+                    if args.debug:
+                        for key, result in results.items():
+                            valid_result, test_result = result
+                            print(key)
+                            print(f'Run: {run + 1:02d} / {args.runs:02d}, '
+                                  f'Epoch: {epoch:02d} / {args.epochs:02d}, '
+                                  f'Best_epoch: {best_epoch:02d}, '
+                                  f'Best_valid: {best_valid:.2%}%, '
+                                  f'Loss: {loss:.4f}, '
+                                  f'Valid: {valid_result:.2%}, '
+                                  f'Test: {test_result:.2%}',
+                                  f'Training Time/epoch: {t2-t1:.3f}')
+                        print('#' * round(140*epoch/(args.epochs+1)))
+            torch.save(model.state_dict(), checkpoint)
+
         print('##### Testing on {}/{}'.format(run + 1, args.runs))
-
+        model.load_state_dict(torch.load(checkpoint))
         results = test(splits)
 
         for key, result in results.items():
@@ -99,7 +103,7 @@ parser.add_argument("--data_path", type=str, default="./data", help="Path for da
 parser.add_argument('--seed', type=int, default=2022, help='Random seed for model and dataset. (default: 2022)')
 
 parser.add_argument('--bn', action='store_true', help='Whether to use batch normalization for GNN encoder. (default: False)')
-parser.add_argument("--layer", nargs="?", default="sage", help="GNN layer, (default: sage)")
+parser.add_argument("--layer", nargs="?", default="gcn", help="GNN layer, (default: gcn)")
 parser.add_argument("--encoder_activation", nargs="?", default="elu", help="Activation function for GNN encoder, (default: elu)")
 parser.add_argument('--encoder_channels', type=int, default=256, help='Channels of encoder input. (default: 256)')
 parser.add_argument('--decoder_channels', type=int, default=64, help='Channels of decoder intermediate layers. (default: 64)')
@@ -123,17 +127,19 @@ parser.add_argument('--epochs', type=int, default=1000, help='Number of training
 parser.add_argument('--runs', type=int, default=10, help='Number of runs. (default: 10)')
 parser.add_argument('--eval_period', type=int, default=10, help='(default: 10)')
 parser.add_argument('--patience', type=int, default=30, help='(default: 30)')
-parser.add_argument("--checkpoint", nargs="?", default="cp_link", help="save path for model. (default: cp_link)")
+parser.add_argument("--checkpoint", nargs="?", default="cp_link", help="checkpoint save path for model. (default: cp_link)")
+parser.add_argument("--load_from_cp", action='store_true', help="Only evaluate with the .pth files from `--checkpoint`. (default: False)")
 parser.add_argument('--debug', action='store_true', help='Whether to log information in each epoch. (default: False)')
 parser.add_argument("--device", type=int, default=0)
+parser.add_argument("--use_cfg", action='store_true', help='Whether to use the best configurations. (default: False)')
 parser.add_argument('--log_path', type=str, default='./log')
 
 args = parser.parse_args()
+if args.use_cfg:
+    args = load_config(args, './config', 'link')
 if not args.checkpoint.endswith('.pth'):
     args.checkpoint += '.pth'
-    
-args.cmd = 'python ' + ' '.join(sys.argv)
-    
+
 set_seed(args.seed)
 if args.device < 0:
     device = "cpu"
