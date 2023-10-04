@@ -160,7 +160,6 @@ if args.use_cfg:
 if not args.checkpoint.endswith('.pth'):
     args.checkpoint += '.pth'
 
-args.cmd = 'python ' + ' '.join(sys.argv)
 set_seed(args.seed)
 if args.device < 0:
     device = "cpu"

@@ -6,8 +6,8 @@ from torch_geometric.utils import add_self_loops, negative_sampling
 from torch.utils.data import DataLoader
 from sklearn.metrics import roc_auc_score, average_precision_score
 
-from base_model import GCNConv
-from utils import edgeidx2sparse
+from .base_model import GCNConv
+from .utils import edgeidx2sparse
 
 
 def ce_loss(pos_out, neg_out, pos_label=None):
@@ -63,7 +63,6 @@ class Encoder(nn.Module):
         use_node_feats=True,
         num_nodes=None,
         node_emb=None,
-        edge_decoder=None,
         random_negative_sampling=False,
     ):
 
@@ -81,12 +80,11 @@ class Encoder(nn.Module):
             num_nodes, in_channels, use_node_feats=use_node_feats, node_emb=node_emb
         )
         for i in range(num_layers):
-            first_channels = in_channels
-            second_channels = out_channels if i == num_layers - 1 else in_channels
-            heads = 1
+            first_channels = in_channels if i == 0 else out_channels
+            second_channels = out_channels
 
             self.convs.append(GCNConv(first_channels, second_channels))
-            self.bns.append(bn(second_channels*heads))
+            self.bns.append(bn(second_channels))
 
         self.dropout = nn.Dropout(dropout)
         self.activation = creat_activation_layer(activation)
@@ -118,7 +116,8 @@ class Encoder(nn.Module):
         return input_feat
 
     def forward(self, x, edge_index, mask=None, mask_ratio=None, t=(1.,), exclude_layers=None, sparse=True, **kwargs):
-
+        if isinstance(t, float):
+            t = (t, )
         if len(t) == 1:
             t = list(repeat(t[0], len(self.convs)))
         if mask is not None:
@@ -289,7 +288,6 @@ class Decoder(nn.Module):
         self.activation = creat_activation_layer(activation)
 
     def reset_parameters(self):
-        # self.mlp_en.reset_parameters()
         for mlp in self.mlps:
             mlp.reset_parameters()
 
@@ -378,7 +376,6 @@ class Bandana(nn.Module):
                 nn.utils.clip_grad_norm_(self.parameters(), grad_norm)
 
             optimizer.step()
-
             loss_total += loss.item()
 
         return loss_total

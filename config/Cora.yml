@@ -2,7 +2,7 @@ node:
   bn: True
   checkpoint: cora_node
   decoder_channels: 256
-  decoder_dropout: 0.2
+  decoder_dropout: 0
   encoder_channels: 256
   encoder_dropout: 0.8
   encoder_layers: 3

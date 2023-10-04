@@ -64,13 +64,16 @@ def set_seed(seed):
 
 def load_config(args, path, mode):
 
-    config_file = os.path.join(path, args.dataset)
+    config_file = os.path.join(path, f'{args.dataset}.yml')
     with open(config_file, "r") as f:
         conf = yaml.load(f, yaml.FullLoader)
     conf = conf[mode]
-
+    
+    float_set = {
+        "decoder_dropout", "encoder_dropout", "lr", "temp", "weight_decay", "weight_decay_prob"
+    }
     for k, v in conf.items():
-        if "lr" in k or "weight_decay" in k:
+        if k in float_set:
             v = float(v)
         setattr(args, k, v)
 

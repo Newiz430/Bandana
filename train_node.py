@@ -50,7 +50,6 @@ def train_linkpred(model, splits, args, device="cpu"):
         'AUC': Logger('AUC', runs, now, args),
         'AP': Logger('AP', runs, now, args),
     }
-    losses = []
     print('Start Training (Link Prediction Pretext Training)...')
     for run in range(runs):
         if not args.load_from_cp:
@@ -69,7 +68,6 @@ def train_linkpred(model, splits, args, device="cpu"):
                 t1 = time.time()
                 loss = train(splits['train'])
                 t2 = time.time()
-                losses.append(loss.item())
 
                 if epoch % args.eval_period == 0:
                     results = test(splits)
@@ -265,8 +263,6 @@ if args.use_cfg:
     args = load_config(args, './config', 'node')
 if not args.checkpoint.endswith('.pth'):
     args.checkpoint += '.pth'
-
-args.cmd = 'python ' + ' '.join(sys.argv)
 
 set_seed(args.seed)
 if args.device < 0:
