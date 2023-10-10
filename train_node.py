@@ -1,8 +1,9 @@
 import os.path as osp
 import sys
 import time
-from datetime import datetime
 import argparse
+from datetime import datetime
+from tqdm import tqdm
 
 import torch
 import torch.nn as nn
@@ -11,12 +12,12 @@ from torch_geometric.datasets import Amazon, Coauthor, Planetoid
 from torch.utils.data import DataLoader
 from sklearn.metrics import f1_score
 
-from src.utils import Logger, set_seed, load_config
+from src.utils import Logger, set_seed, load_config, print_desc
 from src.model import Bandana, Decoder, Encoder
 from src.mask import BandwidthMask
 
 
-def train_linkpred(model, splits, args, device="cpu"):
+def train_link(model, splits, args, device="cpu"):
 
     def train(data):
         model.train()
@@ -49,7 +50,6 @@ def train_linkpred(model, splits, args, device="cpu"):
         'AUC': Logger('AUC', runs, now, args),
         'AP': Logger('AP', runs, now, args),
     }
-    print('Start Training (Link Prediction Pretext Training)...')
     for run in range(runs):
         if not args.load_from_cp:
             model.reset_parameters()
@@ -61,12 +61,13 @@ def train_linkpred(model, splits, args, device="cpu"):
             best_valid = 0.0
             best_epoch = 0
             cnt_wait = 0
+            result_dict = {'AUC': None, 'AP': None}
 
-            for epoch in range(1, 1 + args.epochs):
+            bar = tqdm(range(1, 1 + args.epochs))
+            for epoch in bar:
 
-                t1 = time.time()
                 loss = train(splits['train'])
-                t2 = time.time()
+                print_desc(bar, run, loss, result_dict, monitor, best_valid, best_epoch)
 
                 if epoch % args.eval_period == 0:
                     results = test(splits)
@@ -80,50 +81,38 @@ def train_linkpred(model, splits, args, device="cpu"):
                         cnt_wait += 1
 
                     for key, result in results.items():
-                        valid_result, test_result = result
-                        print(key)
-                        print(f'Run: {run + 1:02d} / {args.runs:02d}, '
-                              f'Epoch: {epoch:02d} / {args.epochs:02d}, '
-                              f'Best_epoch: {best_epoch:02d}, '
-                              f'Best_valid: {best_valid:.2%}%, '
-                              f'Loss: {loss:.4f}, '
-                              f'Valid: {valid_result:.2%}, '
-                              f'Test: {test_result:.2%}',
-                              f'Training Time/epoch: {t2-t1:.3f}')
-                    print('#' * round(140*epoch/(args.epochs+1)))
+                        result_dict[key] = result
+                    print_desc(bar, run, loss, result_dict, monitor, best_valid, best_epoch)
                     if cnt_wait == args.patience:
-                        print('Early stopping!')
+                        bar.close()
+                        print(f'Training ends by early stopping at ep {epoch}.')
                         break
-
-        print('##### Testing on {}/{}'.format(run + 1, args.runs))
 
         model.load_state_dict(torch.load(checkpoint))
         results = test(splits)
 
-        for key, result in results.items():
-            valid_result, test_result = result
-            print(key)
-            print(f'**** Testing on Run: {run + 1:02d}, '
-                  f'Best Epoch: {best_epoch:02d}, '
-                  f'Valid: {valid_result:.2%}, '
-                  f'Test: {test_result:.2%}')
+        for key, res in results.items():
+            print(f"[Test] best {key}: val = {res[0]:.2%}, test = {res[1]:.2%}")
 
         for key, result in results.items():
             loggers[key].add_result(run, result)
 
-    print('##### Final Testing result (Link Prediction Pretext Training)')
     for key in loggers.keys():
         print(key)
         loggers[key].print_statistics()
 
 
-def train_nodeclas(model, data, args, device='cpu'):
+def train_node(model, data, args, device='cpu'):
     def train(loader):
         clf.train()
+        loss_total = 0
         for nodes in loader:
             optimizer.zero_grad()
-            loss_fn(clf(embedding[nodes]), y[nodes]).backward()
+            loss = loss_fn(clf(embedding[nodes]), y[nodes])
+            loss_total += loss.item()
+            loss.backward()
             optimizer.step()
+        return loss_total
 
     @torch.no_grad()
     def test(loader):
@@ -137,9 +126,6 @@ def train_nodeclas(model, data, args, device='cpu'):
         labels = torch.cat(labels, dim=0).cpu()
         logits = logits.argmax(1)
 
-        def acc(y_true, y_pred):
-            return (y_pred == y_true).float().mean().item()
-
         def micro_f1(y_true, y_pred):
             y_true = y_true.view(-1)
             y_pred = y_pred.view(-1)
@@ -152,9 +138,8 @@ def train_nodeclas(model, data, args, device='cpu'):
             macro_f1 = f1_score(y_true=y_true.cpu(), y_pred=y_pred.cpu(), average='macro')
             return macro_f1
 
-        return acc(labels, logits), micro_f1(labels, logits), macro_f1(labels, logits)
+        return micro_f1(labels, logits), macro_f1(labels, logits)
 
-    # 设置数据加载器
     if hasattr(data, 'train_mask'):
         train_loader = DataLoader(data.train_mask.nonzero().squeeze(), pin_memory=False, batch_size=512, shuffle=True)
         test_loader = DataLoader(data.test_mask.nonzero().squeeze(), pin_memory=False, batch_size=20000, shuffle=False)
@@ -172,48 +157,41 @@ def train_nodeclas(model, data, args, device='cpu'):
     clf = nn.Linear(embedding.size(1), y.max().item() + 1).to(device)
 
     loggers = {
-        'ACC': Logger('ACC', args.runs, now, args, log_path=args.log_path),
         'MICRO-F1': Logger('MICRO-F1', args.runs, now, args, log_path=args.log_path),
         'MACRO-F1': Logger('MACRO-F1', args.runs, now, args, log_path=args.log_path),
     }
-    # logger = Logger(args.runs, now, args, log_path=args.log_path)
 
-    print('Start Training (Node Classification)...')
     for run in range(args.runs):
         nn.init.xavier_uniform_(clf.weight.data)
         nn.init.zeros_(clf.bias.data)
         optimizer = torch.optim.Adam(clf.parameters(), lr=0.01, weight_decay=args.weight_decay_prob)  # 1 for citeseer
 
-        best_val_metrics = [0, 0, 0]
-        best_test_metrics = [0, 0, 0]
-        start = time.time()
-        for epoch in range(1, 101):
-            train(train_loader)
+        best_val_metrics = [0, 0]
+        best_test_metrics = [0, 0]
+        result_dict = {'Micro-F1': None, 'Macro-F1': None}
+
+        bar = tqdm(range(1, 101))
+        for _ in bar:
+            loss = train(train_loader)
             val_metrics = test(val_loader)
             test_metrics = test(test_loader)
-            for i in range(3):
+            for i in range(2):
                 if val_metrics[i] >= best_val_metrics[i]:
                     best_val_metrics[i] = val_metrics[i]
                     best_test_metrics[i] = test_metrics[i]
-            end = time.time()
-            if args.debug:
-                print(f"Epoch {epoch:02d} / {100:02d}, Time elapsed {end-start:.4f}\n"
-                      f"(ACC) Valid: {val_metrics[0]:.2%}, Test {test_metrics[0]:.2%}, Best {best_test_metrics[0]:.2%}\n"
-                      f"(MICRO-F1) Valid: {val_metrics[1]:.2%}, Test {test_metrics[1]:.2%}, Best {best_test_metrics[1]:.2%}\n"
-                      f"(MACRO-F1) Valid: {val_metrics[2]:.2%}, Test {test_metrics[2]:.2%}, Best {best_test_metrics[2]:.2%}"
-                      )
 
-        print(f"Run {run+1}: Best test acc {best_test_metrics[0]:.2%}, best test micro-f1 {best_test_metrics[1]:.2%}, "
-              f"Best test macro-f1 {best_test_metrics[2]:.2%}.")
+            for i, key in enumerate(result_dict.keys()):
+                result_dict[key] = (val_metrics[i], test_metrics[i])
+            print_desc(bar, run, loss, result_dict, prefix="Linear probing")
 
-        loggers['ACC'].add_result(run, (best_val_metrics[0], best_test_metrics[0]))
-        loggers['MICRO-F1'].add_result(run, (best_val_metrics[1], best_test_metrics[1]))
-        loggers['MACRO-F1'].add_result(run, (best_val_metrics[2], best_test_metrics[2]))
+        for i, key in enumerate(result_dict.keys()):
+            print(f"[Test] best {key}: val = {best_val_metrics[i]:.2%}, test = {best_test_metrics[i]:.2%}")
 
-    print('##### Final Testing result (Node Classification)')
-    print('')
-    loggers['ACC'].print_statistics(print_info=True)
-    loggers['MICRO-F1'].print_statistics()
+        loggers['MICRO-F1'].add_result(run, (best_val_metrics[0], best_test_metrics[0]))
+        loggers['MACRO-F1'].add_result(run, (best_val_metrics[1], best_test_metrics[1]))
+
+    print("\n")
+    loggers['MICRO-F1'].print_statistics(print_info=True)
     loggers['MACRO-F1'].print_statistics()
 
 
@@ -317,5 +295,5 @@ decoder = Decoder(args.encoder_channels, args.decoder_channels, out_channels=2,
 model = Bandana(encoder, decoder, mask=mask).to(device)
 
 now = datetime.now().strftime('%b%d_%H-%M-%S')
-train_linkpred(model, splits, args, device=device)
-train_nodeclas(model, data, args, device=device)
+train_link(model, splits, args, device=device)
+train_node(model, data, args, device=device)

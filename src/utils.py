@@ -5,7 +5,6 @@ import random
 import yaml
 import numpy as np
 from typing import Optional
-from texttable import Texttable
 
 from torch import Tensor
 from torch_sparse import SparseTensor
@@ -57,7 +56,7 @@ def set_seed(seed):
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed) # if you are using multi-GPU.
+    torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.enabled = False
@@ -79,6 +78,19 @@ def load_config(args, path, mode):
 
     return args
 
+
+def print_desc(bar, run, loss, result_dict, monitor=None, best_valid=None, best_epoch=None, prefix="Pre-training"):
+    desc = f"[{prefix} #{run + 1:02d}] loss = {loss:.4f}, {'/'.join(result_dict.keys())}: "
+    val, test = [], []
+    for key, res in result_dict.items():
+        val.append(f"{res[0]:.2%}" if res is not None else "NA")
+        test.append(f"{res[1]:.2%}" if res is not None else "NA")
+    desc += f"val = {'/'.join(val)}, test = {'/'.join(test)}"
+    if best_valid is not None:
+        desc += f", best valid {monitor} = {best_valid:.2%} at ep {best_epoch:02d}"
+    bar.set_description(desc)
+
+
 class Logger(object):
     def __init__(self, name, runs, time, info=None, log_path=None):
         self.name = name
@@ -94,43 +106,27 @@ class Logger(object):
         assert run >= 0 and run < len(self.results)
         self.results[run].append(result)
 
-    def print_statistics(self, run=None, f=sys.stdout, last_best=False, print_info=False, percentage=True):
-        if run is not None:
-            result = (100 if percentage else 1) * torch.tensor(self.results[run])
+    def print_statistics(self, f=sys.stdout, last_best=False, print_info=False, percentage=True):
+        result = (100 if percentage else 1) * torch.tensor(self.results)
+
+        best_results = []
+
+        for r in result:
+            valid = r[:, 0].max().item()
             if last_best:
                 # get last max value index by reversing result tensor
-                argmax = result.size(0) - result[:, 0].flip(dims=[0]).argmax().item() - 1
+                argmax = r.size(0) - r[:, 0].flip(dims=[0]).argmax().item() - 1
             else:
-                argmax = result[:, 0].argmax().item()
-            print(f'Run {run + 1:02d}:', file=f)
-            print(f'{self.name} Highest Valid: {result[:, 0].max():.2f}', file=f)
-            print(f'{self.name} Highest Eval Point: {argmax + 1}', file=f)
-            print(f'{self.name}    Final Test: {result[argmax, 1]:.2f}', file=f)
+                argmax = r[:, 0].argmax().item()
+            test = r[argmax, 1].item()
+            best_results.append((valid, test))
 
-        else:
-            result = (100 if percentage else 1) * torch.tensor(self.results)
+        best_result = torch.tensor(best_results)
+        print(f' Final {self.name}: val = {best_result[:, 0].mean():.2f} ± {best_result[:, 0].std():.2f}, '
+              f'test = {best_result[:, 1].mean():.2f} ± {best_result[:, 1].std():.2f}', file=f)
 
-            best_results = []
-
-            for r in result:
-                valid = r[:, 0].max().item()
-                if last_best:
-                    # get last max value index by reversing result tensor
-                    argmax = r.size(0) - r[:, 0].flip(dims=[0]).argmax().item() - 1
-                else:
-                    argmax = r[:, 0].argmax().item()
-                test = r[argmax, 1].item()
-                best_results.append((valid, test))
-
-            best_result = torch.tensor(best_results)
-            print(f'All runs:', file=f)
-            r = best_result[:, 0]
-            print(f'{self.name} Highest Valid: {r.mean():.2f} ± {r.std():.2f}', file=f)
-            r = best_result[:, 1]
-            print(f'{self.name}    Final Test: {r.mean():.2f} ± {r.std():.2f}', file=f)
-
-            if self.log_path is not None:
-                with open(os.path.join(self.log_path, 'log.txt'), 'a') as log:
-                    log.write(f'[{self.time}]{self.info}:\n' if print_info else '')
-                    log.write(f'({self.name})\tval = {best_result[:, 0].mean():.2f}±{best_result[:, 0].std():.2f}\t')
-                    log.write(f'test = {best_result[:, 1].mean():.2f}±{best_result[:, 1].std():.2f}\n')
+        if self.log_path is not None:
+            with open(os.path.join(self.log_path, 'log.txt'), 'a') as log:
+                log.write(f'[{self.time}]{self.info}:\n' if print_info else '')
+                log.write(f'({self.name}): val = {best_result[:, 0].mean():.2f} ± {best_result[:, 0].std():.2f}\t'
+                          f'test = {best_result[:, 1].mean():.2f} ± {best_result[:, 1].std():.2f}\n')

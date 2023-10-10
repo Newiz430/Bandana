@@ -11,4 +11,4 @@ link:
   lr: 0.0005
   runs: 10
   temp: 0.3
-  weight_decay: 5e-5
+  weight_decay: 0

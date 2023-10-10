@@ -1,19 +1,20 @@
 import os.path as osp
 import sys
 import time
-from datetime import datetime
 import argparse
+from datetime import datetime
+from tqdm import tqdm
 
 import torch
 import torch_geometric.transforms as T
 from torch_geometric.datasets import Amazon, Coauthor, Planetoid, Reddit
 
-from src.utils import Logger, set_seed, load_config
+from src.utils import Logger, set_seed, load_config, print_desc
 from src.model import Bandana, Decoder, Encoder, DotEdgeDecoder
 from src.mask import BandwidthMask
 
 
-def train_linkpred(model, splits, args, device="cpu"):
+def train_link(model, splits, args, device="cpu"):
 
     def train(data):
         model.train()
@@ -50,7 +51,6 @@ def train_linkpred(model, splits, args, device="cpu"):
         'AUC': Logger('AUC', args.runs, now, args, log_path=args.log_path),
         'AP': Logger('AP', args.runs, now, args, log_path=args.log_path),
     }
-    print('Start Training (Link Prediction Pretext Training)...')
     for run in range(args.runs):
         if not args.load_from_cp:
             model.reset_parameters()
@@ -62,12 +62,13 @@ def train_linkpred(model, splits, args, device="cpu"):
             best_valid = 0.0
             best_epoch = 0
             cnt_wait = 0
+            result_dict = {'AUC': None, 'AP': None}
 
-            for epoch in range(1, 1 + args.epochs):
+            bar = tqdm(range(1, 1 + args.epochs))
+            for epoch in bar:
 
-                t1 = time.time()
                 loss = train(splits['train'])
-                t2 = time.time()
+                print_desc(bar, run, loss, result_dict, monitor, best_valid, best_epoch)
 
                 if epoch % args.eval_period == 0:
                     results = test(splits)
@@ -79,40 +80,24 @@ def train_linkpred(model, splits, args, device="cpu"):
                         cnt_wait = 0
                     else:
                         cnt_wait += 1
-                    if args.debug:
-                        for key, result in results.items():
-                            valid_result, test_result = result
-                            print(key)
-                            print(f'Run: {run + 1:02d} / {args.runs:02d}, '
-                                  f'Epoch: {epoch:02d} / {args.epochs:02d}, '
-                                  f'Best_epoch: {best_epoch:02d}, '
-                                  f'Best_valid: {best_valid:.2%}%, '
-                                  f'Loss: {loss:.4f}, '
-                                  f'Valid: {valid_result:.2%}, '
-                                  f'Test: {test_result:.2%}',
-                                  f'Training Time/epoch: {t2-t1:.3f}')
-                        print('#' * round(140*epoch/(args.epochs+1)))
-                    if cnt_wait == args.patience:
-                        print('Early stopping!')
-                        break
 
-        print('##### Testing on {}/{}'.format(run + 1, args.runs))
+                    for key, result in results.items():
+                        result_dict[key] = result
+                    print_desc(bar, run, loss, result_dict, monitor, best_valid, best_epoch)
+                    if cnt_wait == args.patience:
+                        bar.close()
+                        print(f'Training ends by early stopping at ep {epoch}.')
+                        break
 
         model.load_state_dict(torch.load(checkpoint))
         results = test(splits)
 
-        for key, result in results.items():
-            valid_result, test_result = result
-            print(key)
-            print(f'**** Testing on Run: {run + 1:02d}, '
-                  f'Best Epoch: {best_epoch:02d}, '
-                  f'Valid: {valid_result:.2%}, '
-                  f'Test: {test_result:.2%}')
+        for key, res in results.items():
+            print(f"[Test] best {key}: val = {res[0]:.2%}, test = {res[1]:.2%}")
 
         for key, result in results.items():
             loggers[key].add_result(run, result)
 
-    print('##### Final Testing result (Link Prediction)')
     loggers['AUC'].print_statistics(print_info=True)
     loggers['AP'].print_statistics()
 
@@ -203,4 +188,4 @@ decoder = Decoder(args.encoder_channels, args.decoder_channels, out_channels=2,
 model = Bandana(encoder, decoder, mask=mask).to(device)
 
 now = datetime.now().strftime('%b%d_%H-%M-%S')
-train_linkpred(model, splits, args, device=device)
+train_link(model, splits, args, device=device)

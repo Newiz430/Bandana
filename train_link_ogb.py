@@ -1,9 +1,9 @@
 import os.path as osp
 import time
-from datetime import datetime
-from tqdm import tqdm
 import sys
 import argparse
+from datetime import datetime
+from tqdm import tqdm
 from copy import copy
 
 import torch
@@ -11,12 +11,12 @@ import torch_geometric.transforms as T
 from torch_geometric.utils import to_undirected
 from ogb.linkproppred import Evaluator, PygLinkPropPredDataset
 
-from src.utils import Logger, set_seed, load_config
+from src.utils import Logger, set_seed, load_config, print_desc
 from src.model import Bandana, Decoder, Encoder
 from src.mask import BandwidthMask
 
 
-def train_linkpred(model, splits, args, device="cpu"):
+def train_link(model, splits, args, device="cpu"):
 
     def train(data):
         model.train()
@@ -35,15 +35,13 @@ def train_linkpred(model, splits, args, device="cpu"):
         results = model.test_ogb(z, splits, evaluator, batch_size=batch_size)
         return results
 
-    evaluator = Evaluator(name=args.dataset)    
-    monitor = 'Hits@50'
+    evaluator = Evaluator(name=args.dataset)
     checkpoint = args.checkpoint
     loggers = {
         'Hits@20': Logger('Hits@20', args.runs, now, args, log_path=args.log_path),
         'Hits@50': Logger('Hits@50', args.runs, now, args, log_path=args.log_path),
         'Hits@100': Logger('Hits@100', args.runs, now, args, log_path=args.log_path),
     }
-    print('Start Training...')
     for run in range(args.runs):
         if not args.load_from_cp:
             model.reset_parameters()
@@ -52,47 +50,31 @@ def train_linkpred(model, splits, args, device="cpu"):
                                          lr=args.lr,
                                          weight_decay=args.weight_decay)
 
-            best_valid = 0.0
-            best_epoch = 0
-            for epoch in tqdm(range(1, 1 + args.epochs)):
+            result_dict = {'Hits@20': None, 'Hits@50': None, 'Hits@100': None}
 
-                t1 = time.time()
+            bar = tqdm(range(1, 1 + args.epochs))
+            for epoch in bar:
+
                 loss = train(splits['train'])
-                t2 = time.time()
+                print_desc(bar, run, loss, result_dict)
 
                 if epoch % args.eval_period == 0:
                     results = test(splits)
-                    if args.debug:
-                        for key, result in results.items():
-                            valid_result, test_result = result
-                            print(key)
-                            print(f'Run: {run + 1:02d} / {args.runs:02d}, '
-                                  f'Epoch: {epoch:02d} / {args.epochs:02d}, '
-                                  f'Best_epoch: {best_epoch:02d}, '
-                                  f'Best_valid: {best_valid:.2%}%, '
-                                  f'Loss: {loss:.4f}, '
-                                  f'Valid: {valid_result:.2%}, '
-                                  f'Test: {test_result:.2%}',
-                                  f'Training Time/epoch: {t2-t1:.3f}')
-                        print('#' * round(140*epoch/(args.epochs+1)))
+                    for key, result in results.items():
+                        result_dict[key] = result
+                    print_desc(bar, run, loss, result_dict)
+
             torch.save(model.state_dict(), checkpoint)
 
-        print('##### Testing on {}/{}'.format(run + 1, args.runs))
         model.load_state_dict(torch.load(checkpoint))
         results = test(splits)
 
-        for key, result in results.items():
-            valid_result, test_result = result
-            print(key)
-            print(f'**** Testing on Run: {run + 1:02d}, '
-                  f'Best Epoch: {best_epoch:02d}, '
-                  f'Valid: {valid_result:.2%}, '
-                  f'Test: {test_result:.2%}')
+        for key, res in results.items():
+            print(f"[Test] best {key}: val = {res[0]:.2%}, test = {res[1]:.2%}")
 
         for key, result in results.items():
             loggers[key].add_result(run, result)
 
-    print('##### Final Testing result')
     loggers['Hits@20'].print_statistics(print_info=True)
     loggers['Hits@50'].print_statistics()
     loggers['Hits@100'].print_statistics()
@@ -163,7 +145,7 @@ if args.dataset in {'ogbl-collab'}:
         year_mask = split_edge['train']['year'] >= args.year
         split_edge['train']['edge'] = split_edge['train']['edge'][year_mask]
         data.edge_index = to_undirected(split_edge['train']['edge'].t())
-        print(f"{1 - year_mask.float().mean():.2%} of edges are dropped accordding to edge year {args.year}.")
+        print(f"{1 - year_mask.float().mean():.2%} of edges are dropped according to edge year {args.year}.")
 train_data, val_data, test_data = copy(data), copy(data), copy(data)
             
 args.val_as_input = True
@@ -194,4 +176,4 @@ edge_decoder = Decoder(args.encoder_channels, args.decoder_channels, out_channel
 model = Bandana(encoder, edge_decoder, mask, random_negative_sampling=True).to(device)
 
 now = datetime.now().strftime('%b%d_%H-%M-%S')
-train_linkpred(model, splits, args, device=device)
+train_link(model, splits, args, device=device)

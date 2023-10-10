@@ -422,7 +422,7 @@ class Bandana(nn.Module):
         neg_test_pred = self.batch_predict(z, neg_test_edge, batch_size, probing_decoder)
 
         results = {}
-        for K in [20, 50]:
+        for K in [20, 50, 100]:
             evaluator.K = K
             valid_hits = evaluator.eval(
                 {"y_pred_pos": pos_valid_pred, "y_pred_neg": neg_valid_pred, }
