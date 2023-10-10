@@ -1,9 +1,9 @@
 import sys
 import os
-import torch
-import random
 import yaml
+import random
 import numpy as np
+import torch
 from typing import Optional
 
 from torch import Tensor
@@ -18,6 +18,7 @@ def edgeidx2sparse(edge_index, num_nodes, edge_attr=None):
      ).to(edge_index.device)
      sparse_edge_index.set_value_(edge_attr, layout="coo")
      return sparse_edge_index
+
 
 def softmax_with_temp(
     src: Tensor,
@@ -50,6 +51,7 @@ def softmax_with_temp(
 
     return out / out_sum
 
+
 def set_seed(seed):
     random.seed(seed)
     os.environ['PYTHONHASHSEED'] = str(seed)
@@ -60,6 +62,7 @@ def set_seed(seed):
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.enabled = False
+
 
 def load_config(args, path, mode):
 

@@ -51,21 +51,8 @@ def creat_activation_layer(activation):
 
 
 class Encoder(nn.Module):
-    def __init__(
-        self,
-        in_channels,
-        out_channels,
-        num_layers=2,
-        dropout=0.5,
-        bn=False,
-        layer="gcn",
-        activation="elu",
-        use_node_feats=True,
-        num_nodes=None,
-        node_emb=None,
-        random_negative_sampling=False,
-    ):
-
+    def __init__(self, in_channels, out_channels, num_layers=2, dropout=0.5, bn=False, activation="elu",
+                 use_node_feats=True, num_nodes=None, node_emb=None, random_negative_sampling=False):
         super().__init__()
         self.convs = nn.ModuleList()
         self.bns = nn.ModuleList()
@@ -115,90 +102,68 @@ class Encoder(nn.Module):
             input_feat = self.emb.weight
         return input_feat
 
-    def forward(self, x, edge_index, mask=None, mask_ratio=None, t=(1.,), exclude_layers=None, sparse=True, **kwargs):
-        if isinstance(t, float):
-            t = (t, )
-        if len(t) == 1:
-            t = list(repeat(t[0], len(self.convs)))
+    def forward(self, x, edge_index, mask=None, temp=(1.,), exclude_layers=None, sparse=True, **kwargs):
+        if isinstance(temp, float):
+            temp = (temp,)
+        if len(temp) == 1:
+            temp = list(repeat(temp[0], len(self.convs)))
         if mask is not None:
-            assert len(mask_ratio) in [1, len(self.convs)], \
-                'Mask ratios should be 1 or equal to #layers of the encoder.'
-            if len(mask_ratio) == 1:
-                mask_ratio = list(repeat(mask_ratio[0], len(self.convs)))
-            return self._layer_wise_forward(x, edge_index, mask, mask_ratio, t, exclude_layers, sparse, **kwargs)
+            return self._lwp_forward(x, edge_index, mask, temp, exclude_layers, sparse, **kwargs)
         else:
-            return self._forward(x, edge_index, sparse, **kwargs)
+            return self._forward(x, edge_index, sparse)
 
-    def _layer_wise_forward(self, x, edge_index, mask, mask_ratio, t, exclude_layers, sparse, *,
-                            recon_loss, edge_decoder, neg_edges, perm, **kwargs):
+    def _lwp_forward(self, x, edge_index, mask, temp, exclude_layers, sparse, *,
+                     recon_loss, decoder, neg_edges, perm):
 
         batch_veiled_edges = edge_index[:, perm]
         batch_neg_edges = neg_edges[:, perm]
         layer_loss = torch.tensor([], device=x.device)
 
-        def edge_reg(x, veil):
-            batch_veil = veil[perm]
-            pos_out = edge_decoder(
+        def edge_reg(x, bandwidth):
+            batch_weight = bandwidth[perm]
+            pos_out = decoder(
                 x, batch_veiled_edges, sigmoid=False
             )
-            neg_out = edge_decoder(x, batch_neg_edges, sigmoid=False)
-            return recon_loss(pos_out, neg_out, batch_veil)
+            neg_out = decoder(x, batch_neg_edges, sigmoid=False)
+            return recon_loss(pos_out, neg_out, batch_weight)
 
         x = self.create_input_feat(x)
 
         for i, conv in enumerate(self.convs[:-1]):
             x = self.dropout(x)
-            if mask_ratio[i] > 0:
-                veil = mask(edge_index, mask_ratio=mask_ratio[i], t=t[i])
-                if sparse:
-                    edge_index_sparse = edgeidx2sparse(edge_index, x.size(0), edge_attr=veil)
-                    x = conv(x, edge_index_sparse)
-                    x = self.bns[i](x)
-                    x = self.activation(x)
-                    if not exclude_layers[i]:
-                        layer_loss = torch.cat((layer_loss, edge_reg(x, veil).unsqueeze(-1)), dim=-1)
-                else:
-                    x = conv(x, edge_index, edge_weight=veil)
-                    x = self.bns[i](x)
-                    x = self.activation(x)
-                    if not exclude_layers[i]:
-                        layer_loss = torch.cat((layer_loss, edge_reg(x, veil).unsqueeze(-1)), dim=-1)
-            else:
-                if sparse:
-                    edge_index_sparse = edgeidx2sparse(edge_index, x.size(0))
-                    x = conv(x, edge_index_sparse)
-                else:
-                    x = conv(x, edge_index)
+            bandwidth = mask(edge_index, temp=temp[i])
+            if sparse:
+                edge_index_sparse = edgeidx2sparse(edge_index, x.size(0), edge_attr=bandwidth)
+                x = conv(x, edge_index_sparse)
                 x = self.bns[i](x)
                 x = self.activation(x)
+                if not exclude_layers[i]:
+                    layer_loss = torch.cat((layer_loss, edge_reg(x, bandwidth).unsqueeze(-1)), dim=-1)
+            else:
+                x = conv(x, edge_index, edge_weight=bandwidth)
+                x = self.bns[i](x)
+                x = self.activation(x)
+                if not exclude_layers[i]:
+                    layer_loss = torch.cat((layer_loss, edge_reg(x, bandwidth).unsqueeze(-1)), dim=-1)
         x = self.dropout(x)
-        if mask_ratio[-1] > 0:
-            veil = mask(edge_index, mask_ratio=mask_ratio[-1], t=t[-1])
-            if sparse:
-                edge_index_sparse = edgeidx2sparse(edge_index, x.size(0), edge_attr=veil)
-                x = self.convs[-1](x, edge_index_sparse)
-                x = self.bns[-1](x)
-                x = self.activation(x)
-                if not exclude_layers[-1]:
-                    layer_loss = torch.cat((layer_loss, edge_reg(x, veil).unsqueeze(-1)), dim=-1)
-            else:
-                x = self.convs[-1](x, edge_index, edge_weight=veil)
-                x = self.bns[-1](x)
-                x = self.activation(x)
-                if not exclude_layers[-1]:
-                    layer_loss = torch.cat((layer_loss, edge_reg(x, veil).unsqueeze(-1)), dim=-1)
-        else:
-            if sparse:
-                edge_index_sparse = edgeidx2sparse(edge_index, x.size(0))
-                x = self.convs[-1](x, edge_index_sparse)
-            else:
-                x = self.convs[-1](x, edge_index)
+        bandwidth = mask(edge_index, temp=temp[-1])
+        if sparse:
+            edge_index_sparse = edgeidx2sparse(edge_index, x.size(0), edge_attr=bandwidth)
+            x = self.convs[-1](x, edge_index_sparse)
             x = self.bns[-1](x)
             x = self.activation(x)
+            if not exclude_layers[-1]:
+                layer_loss = torch.cat((layer_loss, edge_reg(x, bandwidth).unsqueeze(-1)), dim=-1)
+        else:
+            x = self.convs[-1](x, edge_index, edge_weight=bandwidth)
+            x = self.bns[-1](x)
+            x = self.activation(x)
+            if not exclude_layers[-1]:
+                layer_loss = torch.cat((layer_loss, edge_reg(x, bandwidth).unsqueeze(-1)), dim=-1)
 
         return x, layer_loss
 
-    def _forward(self, x, edge_index, sparse=True, **kwargs):
+    def _forward(self, x, edge_index, sparse=True):
 
         x = self.create_input_feat(x)
         if sparse:
@@ -318,13 +283,7 @@ def random_negative_sampler(edge_index, num_nodes, num_neg_samples):
 
 
 class Bandana(nn.Module):
-    def __init__(
-        self,
-        encoder,
-        decoder,
-        mask=None,
-        random_negative_sampling=False
-    ):
+    def __init__(self, encoder, decoder, mask=None, random_negative_sampling=False):
         super().__init__()
         self.encoder = encoder
         self.decoder = decoder
@@ -344,10 +303,8 @@ class Bandana(nn.Module):
     def forward(self, x, edge_index):
         return self.encoder(x, edge_index)
 
-    def train_epoch(
-        self, data, optimizer, neg_ratio=0.5, mask_ratio=None, t=(1.,), exclude_layers=[],
-        batch_size=2 ** 16, grad_norm=1.0, sparse=False
-    ):
+    def train_epoch(self, data, optimizer, neg_ratio=0.5, temp=(1.,), exclude_layers=[], batch_size=2**16,
+                    grad_norm=1.0, sparse=False):
 
         x, edge_index = data.x, data.edge_index
 
@@ -359,15 +316,13 @@ class Bandana(nn.Module):
             num_neg_samples=int(data.num_edges * neg_ratio * 2),
         ).view(2, -1)
 
-        for perm in DataLoader(
-            range(data.num_edges), batch_size=batch_size, shuffle=True
-        ):
+        for perm in DataLoader(range(data.num_edges), batch_size=batch_size, shuffle=True):
 
             optimizer.zero_grad()
 
-            z, layer_loss = self.encoder(x, edge_index, mask=self.mask, mask_ratio=mask_ratio, t=t,
-                                         exclude_layers=exclude_layers, sparse=sparse, recon_loss=self.loss_fn,
-                                         edge_decoder=self.decoder, neg_edges=neg_edges, perm=perm)
+            z, layer_loss = self.encoder(x, edge_index, mask=self.mask, temp=temp, exclude_layers=exclude_layers,
+                                         sparse=sparse, recon_loss=self.loss_fn, decoder=self.decoder,
+                                         neg_edges=neg_edges, perm=perm)
 
             loss = layer_loss.mean(dim=-1)
             loss.backward()
@@ -381,7 +336,7 @@ class Bandana(nn.Module):
         return loss_total
 
     @torch.no_grad()
-    def batch_predict(self, z, edges, batch_size=2 ** 16, probing_decoder=None):
+    def batch_predict(self, z, edges, batch_size=2**16, probing_decoder=None):
         preds = []
         for perm in DataLoader(range(edges.size(1)), batch_size):
             edge = edges[:, perm]

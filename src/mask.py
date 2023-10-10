@@ -12,16 +12,15 @@ class BandwidthMask(nn.Module):
         self.num_nodes = num_nodes
         self.undirected = undirected
 
-    def forward(self, edge_index, mask_ratio, t, **kwargs):
-        # treat every undirected graph as a directed graph
-        # (two inversed edges have different bandwidths)
+    def forward(self, edge_index, temp):
+        # two inversed edges have different bandwidths
         if self.undirected:
             edge_index = to_undirected(edge_index)
-        veil = self._veil_edge(edge_index, t=t)
+        bandwidth = self._veil_edge(edge_index, temp=temp)
 
-        return veil
+        return bandwidth
 
-    def _veil_edge(self, edge_index: Tensor, t: float = 1., **kwargs):
+    def _veil_edge(self, edge_index: Tensor, temp: float = 1.):
         e_ids = torch.arange(edge_index.size(1), dtype=torch.long, device=edge_index.device)
         bandwidth = torch.randn_like(e_ids, dtype=torch.float32)
         edge_index = edgeidx2sparse(edge_index, self.num_nodes)
@@ -29,7 +28,7 @@ class BandwidthMask(nn.Module):
                                       edge_index.storage.row(),
                                       edge_index.storage.rowptr(),
                                       edge_index.size(0),
-                                      t=t)
+                                      t=temp)
         return bandwidth
 
     def extra_repr(self):
