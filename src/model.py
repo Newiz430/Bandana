@@ -39,7 +39,7 @@ def create_input_layer(num_nodes, num_node_feats,
     return input_dim, emb
 
 
-def creat_activation_layer(activation):
+def create_activation_layer(activation):
     if activation is None:
         return nn.Identity()
     elif activation == "relu":
@@ -74,7 +74,7 @@ class Encoder(nn.Module):
             self.bns.append(bn(second_channels))
 
         self.dropout = nn.Dropout(dropout)
-        self.activation = creat_activation_layer(activation)
+        self.activation = create_activation_layer(activation)
 
         if random_negative_sampling:
             # this will be faster than pyg negative_sampling
@@ -115,14 +115,14 @@ class Encoder(nn.Module):
     def _lwp_forward(self, x, edge_index, mask, temp, exclude_layers, sparse, *,
                      recon_loss, decoder, neg_edges, perm):
 
-        batch_veiled_edges = edge_index[:, perm]
+        batch_pos_edges = edge_index[:, perm]
         batch_neg_edges = neg_edges[:, perm]
         layer_loss = torch.tensor([], device=x.device)
 
         def edge_reg(x, bandwidth):
             batch_weight = bandwidth[perm]
             pos_out = decoder(
-                x, batch_veiled_edges, sigmoid=False
+                x, batch_pos_edges, sigmoid=False
             )
             neg_out = decoder(x, batch_neg_edges, sigmoid=False)
             return recon_loss(pos_out, neg_out, batch_weight)
@@ -250,7 +250,7 @@ class Decoder(nn.Module):
             self.mlps.append(nn.Linear(first_channels, second_channels))
 
         self.dropout = nn.Dropout(dropout)
-        self.activation = creat_activation_layer(activation)
+        self.activation = create_activation_layer(activation)
 
     def reset_parameters(self):
         for mlp in self.mlps:

@@ -94,7 +94,6 @@ def train_link(model, splits, args, device="cpu"):
             loggers[key].add_result(run, result)
 
     for key in loggers.keys():
-        print(key)
         loggers[key].print_statistics()
 
 
