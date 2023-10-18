@@ -1,4 +1,4 @@
-# Bandana: Interpretable Masked Graph Autoencoder with Non-discrete Bandwidths
+# Bandana: Masked Graph Autoencoder with Non-discrete Bandwidths
 
 # Requirements
 
