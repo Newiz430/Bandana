@@ -6,6 +6,9 @@ See `requirements.txt`.
 
 # Reproduction
 
+See `run.ipynb` for our experiment results. 
+You can either run the model by this Jupyter file or by commands below in the terminal:
+
 ## Link prediction
 
 ```shell
