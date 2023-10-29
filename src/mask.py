@@ -16,11 +16,11 @@ class BandwidthMask(nn.Module):
         # two inversed edges have different bandwidths
         if self.undirected:
             edge_index = to_undirected(edge_index)
-        bandwidth = self._veil_edge(edge_index, temp=temp)
+        bandwidth = self.mask(edge_index, temp=temp)
 
         return bandwidth
 
-    def _veil_edge(self, edge_index: Tensor, temp: float = 1.):
+    def mask(self, edge_index: Tensor, temp: float = 1.):
         e_ids = torch.arange(edge_index.size(1), dtype=torch.long, device=edge_index.device)
         bandwidth = torch.randn_like(e_ids, dtype=torch.float32)
         edge_index = edgeidx2sparse(edge_index, self.num_nodes)
