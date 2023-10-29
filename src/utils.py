@@ -125,7 +125,7 @@ class Logger(object):
             best_results.append((valid, test))
 
         best_result = torch.tensor(best_results)
-        print(f' Final {self.name}: val = {best_result[:, 0].mean():.2f} ± {best_result[:, 0].std():.2f}, '
+        print(f' Final {self.name}(%): val = {best_result[:, 0].mean():.2f} ± {best_result[:, 0].std():.2f}, '
               f'test = {best_result[:, 1].mean():.2f} ± {best_result[:, 1].std():.2f}', file=f)
 
         if self.log_path is not None:

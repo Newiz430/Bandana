@@ -94,6 +94,7 @@ def train_link(model, splits, args, device="cpu"):
         for key, result in results.items():
             loggers[key].add_result(run, result)
 
+    print("\n")
     loggers['AUC'].print_statistics(print_info=True)
     loggers['AP'].print_statistics()
 

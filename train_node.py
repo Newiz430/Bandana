@@ -93,9 +93,6 @@ def train_link(model, splits, args, device="cpu"):
         for key, result in results.items():
             loggers[key].add_result(run, result)
 
-    for key in loggers.keys():
-        loggers[key].print_statistics()
-
 
 def train_node(model, data, args, device='cpu'):
     def train(loader):

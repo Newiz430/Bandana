@@ -5,13 +5,13 @@ node:
   decoder_dropout: 0.2
   encoder_channels: 256
   encoder_dropout: 0.5
-  encoder_layers: 2
+  encoder_layers: 3
   epochs: 1000
   eval_period: 10
   l2_norm: False
   lr: 0.001
   runs: 10
-  temp: 0.6
+  temp: 0.4
   weight_decay: 0
   weight_decay_prob: 5e-4
 
