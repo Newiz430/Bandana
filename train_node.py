@@ -1,3 +1,4 @@
+import os
 import argparse
 from datetime import datetime
 from tqdm import tqdm
@@ -5,7 +6,8 @@ from tqdm import tqdm
 import torch
 import torch.nn as nn
 import torch_geometric.transforms as T
-from torch_geometric.datasets import Amazon, Coauthor, Planetoid
+from torch_geometric.data import Data
+from torch_geometric.datasets import Amazon, Coauthor, Planetoid, WikiCS
 from torch.utils.data import DataLoader
 from sklearn.metrics import f1_score
 
@@ -205,6 +207,8 @@ if __name__ == "__main__":
     parser.add_argument('--epochs', type=int, default=1000, help='Number of training epochs. (default: 1000)')
     parser.add_argument('--temp', type=float, nargs="+", default=[1], help='Softmax temperature for masking. (default: 1)')
     parser.add_argument('--neg_ratio', type=float, default=0.5, help='Ratio for sampling negative edges. (default: 50%)')
+    parser.add_argument('--val_ratio', type=float, default=0.1, help='Data ratio for node cls validation. (default: 10%)')
+    parser.add_argument('--test_ratio', type=float, default=0.8, help='Data ratio for node cls test. (default: 80%)')
     parser.add_argument('--exclude_layers', type=int, nargs='*', help='Encoder layers to be excluded from layer-wise loss. (default: [])')
     parser.add_argument('--lr', type=float, default=0.01, help='Learning rate for training. (default: 0.01)')
     parser.add_argument('--weight_decay', type=float, default=5e-5, help='Weight decay for link prediction training. (default: 5e-5)')
@@ -235,31 +239,50 @@ if __name__ == "__main__":
     else:
         device = f"cuda:{args.device}" if torch.cuda.is_available() else "cpu"
 
-    transform = T.Compose([
-        T.ToUndirected(),
-        T.ToDevice(device),
-    ])
+    if args.dataset in {'Wiki-CS'}:
+        transform = T.ToDevice(device)
+    else:
+        transform = T.Compose([
+            T.ToUndirected(),
+            T.ToDevice(device),
+        ])
 
-    if args.dataset in {'ogbn-arxiv'}:
+    if args.dataset in {'ogbn-arxiv', 'ogbn-products', 'ogbn-mag'}:
         from ogb.nodeproppred import PygNodePropPredDataset
         print('Loading ogb dataset...')
         dataset = PygNodePropPredDataset(root=args.data_path, name=args.dataset)
-        data = transform(dataset[0])
-        split_idx = dataset.get_idx_split()
-        data.train_nodes = split_idx['train']
-        data.val_nodes = split_idx['valid']
-        data.test_nodes = split_idx['test']
+        if args.dataset in ['ogbn-mag']:
+            data = Data(
+                x=dataset[0].x_dict['paper'],
+                edge_index=dataset[0].edge_index_dict[('paper', 'cites', 'paper')],
+                y=dataset[0].y_dict['paper'])
+            data = transform(data)
+            split_idx = dataset.get_idx_split()
+            data.train_nodes = split_idx['train']['paper']
+            data.val_nodes = split_idx['valid']['paper']
+            data.test_nodes = split_idx['test']['paper']
+        else:
+            data = transform(dataset[0])
+            split_idx = dataset.get_idx_split()
+            data.train_nodes = split_idx['train']
+            data.val_nodes = split_idx['valid']
+            data.test_nodes = split_idx['test']
     elif args.dataset in {'Cora', 'Citeseer', 'Pubmed'}:
+        # public split is used
         dataset = Planetoid(args.data_path, args.dataset)
         data = transform(dataset[0])
     elif args.dataset in {'Photo', 'Computers'}:
         dataset = Amazon(args.data_path, args.dataset)
         data = transform(dataset[0])
-        data = T.RandomNodeSplit(num_val=0.1, num_test=0.8)(data)
+        data = T.RandomNodeSplit(num_val=args.val_ratio, num_test=args.test_ratio)(data)
     elif args.dataset in {'CS', 'Physics'}:
         dataset = Coauthor(args.data_path, args.dataset)
         data = transform(dataset[0])
-        data = T.RandomNodeSplit(num_val=0.1, num_test=0.8)(data)
+        data = T.RandomNodeSplit(num_val=args.val_ratio, num_test=args.test_ratio)(data)
+    elif args.dataset in {'Wiki-CS'}:
+        dataset = WikiCS(os.path.join(args.data_path, 'Wiki-CS'), is_undirected=False)
+        data = transform(dataset[0])
+        data = T.RandomNodeSplit(num_val=args.val_ratio, num_test=args.test_ratio)(data)
     else:
         raise ValueError(args.dataset)
 
@@ -270,7 +293,7 @@ if __name__ == "__main__":
 
     splits = dict(train=train_data, valid=val_data, test=test_data)
 
-    mask = BandwidthMask(num_nodes=data.num_nodes, undirected=True)
+    mask = BandwidthMask(num_nodes=data.num_nodes, undirected=False if args.dataset in {'Wiki-CS'} else True)
     encoder = Encoder(data.num_features, args.encoder_channels,
                       num_layers=args.encoder_layers, dropout=args.encoder_dropout,
                       bn=args.bn, activation=args.encoder_activation)

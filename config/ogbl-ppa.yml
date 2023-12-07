@@ -1,0 +1,14 @@
+link:
+  bn: True
+  checkpoint: ppa_link
+  decoder_channels: 64
+  decoder_dropout: 0.3
+  encoder_channels: 128
+  encoder_dropout: 0.3
+  encoder_layers: 1
+  epochs: 500
+  eval_period: 10
+  lr: 0.0005
+  runs: 10
+  temp: 0.3
+  weight_decay: 0

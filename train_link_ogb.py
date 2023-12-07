@@ -126,7 +126,7 @@ else:
 transform = T.ToDevice(device)
 
 print('Loading Data...')
-if args.dataset in {'ogbl-collab'}:
+if args.dataset in {'ogbl-collab', 'ogbl-ppa'}:
     dataset = PygLinkPropPredDataset(name=args.dataset, root=args.data_path)
     data = transform(dataset[0])
     del data.edge_weight, data.edge_year

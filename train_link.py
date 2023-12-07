@@ -4,7 +4,7 @@ from tqdm import tqdm
 
 import torch
 import torch_geometric.transforms as T
-from torch_geometric.datasets import Amazon, Coauthor, Planetoid, Reddit
+from torch_geometric.datasets import Amazon, Coauthor, Planetoid
 
 from src.utils import Logger, set_seed, load_config, print_desc
 from src.model import Bandana, Decoder, Encoder, DotEdgeDecoder
