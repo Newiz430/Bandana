@@ -2,7 +2,7 @@
 
 # Update: supplementary figures
 
-Please see the `supp` directory for the additional figures.
+Please see the `figures` directory for the additional figures.
 
 # Requirements
 
