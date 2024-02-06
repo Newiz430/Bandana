@@ -6,7 +6,7 @@ We explore a new paradigm of topological masked graph autoencoders with non-disc
 
 ## Links
 
-| :page_facing_up: ~~**Preprint version** (full version)~~ | :book: ~~Published version~~ |​ :speech_balloon: ~~Blog~~ |
+| :page_facing_up: ~~**Preprint version** (full version)~~ | :book: ~~Published version~~ | :eye_speech_bubble: [OpenReview](https://openreview.net/forum?id=0iwNrRRIiZ) | :speech_balloon: ~~Blog~~ |
 
 ## Requirements
 
@@ -46,7 +46,7 @@ Please cite our paper for your research if our paper helps:
 @inproceedings{bandana,
   title={Masked Graph Autoencoder with Non-discrete Bandwidths}, 
   author={Ziwen, Zhao and Yuhua, Li and Yixiong, Zou and Jiliang, Tang and Ruixuan, Li},
-  booktitle={CoRR},
+  booktitle={Proceedings of the 33rd ACM Web Conference},
   year={2024},
   month={May},
   publisher={Association for Computing Machinery},
