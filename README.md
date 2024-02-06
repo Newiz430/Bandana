@@ -1,33 +1,59 @@
-# Bandana: Masked Graph Autoencoder with Non-discrete Bandwidths
+<h1><img align="center" height="50" src="https://cdn.wikirby.com/thumb/4/4c/KRtDLD_Bandana_Waddle_Dee.png/525px-KRtDLD_Bandana_Waddle_Dee.png">Bandana: Masked Graph Autoencoder with Non-discrete Bandwidths</h1>
 
-# Update: supplementary figures
+This is the official source code repo of paper "Masked Graph Autoencoder with Non-discrete Bandwidths" in *TheWebConf(WWW) 2024*.
 
-Please see the `figures` directory for the additional figures.
+We explore a new paradigm of topological masked graph autoencoders with non-discrete masking strategies, named "bandwidths". We verify its effectiveness in learning network topology by both theory and experiment.
 
-# Requirements
+## Links
+
+| :page_facing_up: ~~**Preprint version** (full version)~~ | :book: ~~Published version~~ |​ :speech_balloon: ~~Blog~~ |
+
+## Requirements
 
 See `requirements.txt`.
 
-# Reproduction
+## Reproduction
 
 See `run.ipynb` for our experiment results. 
 You can either run the model by this Jupyter file or by commands below in the terminal:
 
-## Link prediction
+### Link prediction
 
 ```shell
 python train_link.py --dataset=<dataset_name> --use_cfg --device=<gpu_id>
 ```
-`<dataset_name>`: Cora, Citeseer, Pubmed, Photo, Computers, CS, Physics
+> `<dataset_name>`: Cora, Citeseer, Pubmed, Photo, Computers, CS, Physics
+>
+> By `--use_cfg`, the best hyperparameters in the `config/<dataset_name>.yml` file are used by default.
 
 ```shell
 python train_link_ogb.py --dataset=<dataset_name> --use_cfg --device=<gpu_id>
 ```
-`<dataset_name>`: ogbl-collab, ogbl-ppa
+> `<dataset_name>`: ogbl-collab, ogbl-ppa
 
-## Node classification
+### Node classification
 
 ```shell
 python train_node.py --dataset=<dataset_name> --use_cfg --device=<gpu_id>
 ```
-`<dataset_name>`: Cora, Citeseer, Pubmed, Photo, Computers, CS, Physics, ogbn-arxiv, ogbn-mag
+> `<dataset_name>`: Cora, Citeseer, Pubmed, Photo, Computers, CS, Physics, Wiki-CS, ogbn-arxiv, ogbn-mag
+
+## Citing
+
+Please cite our paper for your research if our paper helps:
+
+```
+@inproceedings{bandana,
+  title={Masked Graph Autoencoder with Non-discrete Bandwidths}, 
+  author={Ziwen, Zhao and Yuhua, Li and Yixiong, Zou and Jiliang, Tang and Ruixuan, Li},
+  booktitle={CoRR},
+  year={2024},
+  month={May},
+  publisher={Association for Computing Machinery},
+  address={Singapore, Singapore},
+}
+```
+
+## Special thanks
+
+* [MaskGAE](https://github.com/EdisonLeeeee/MaskGAE)
