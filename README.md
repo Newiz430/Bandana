@@ -6,7 +6,7 @@ We explore a new paradigm of topological masked graph autoencoders with non-disc
 
 ## Links
 
-| :page_facing_up: [**Preprint version** (full version)](https://arxiv.org/abs/2402.03814) | :book: ~~Published version~~ | :eye_speech_bubble: [OpenReview](https://openreview.net/forum?id=0iwNrRRIiZ) | :speech_balloon: ~~Blog~~ |
+| :page_facing_up: [**Preprint version** (full version)](https://arxiv.org/abs/2402.03814) | :book: ~~Published version~~ | :eye_speech_bubble: [OpenReview](https://openreview.net/forum?id=0iwNrRRIiZ) | :speech_balloon: [Blog](https://zhuanlan.zhihu.com/p/681841195) |
 
 ## Requirements
 
