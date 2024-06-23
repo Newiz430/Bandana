@@ -47,6 +47,7 @@ Please cite our paper for your research if our paper helps:
   title={Masked Graph Autoencoder with Non-discrete Bandwidths}, 
   author={Ziwen, Zhao and Yuhua, Li and Yixiong, Zou and Jiliang, Tang and Ruixuan, Li},
   booktitle={Proceedings of the 33rd ACM Web Conference},
+  pages={377-–388},
   year={2024},
   month={May},
   publisher={Association for Computing Machinery},
